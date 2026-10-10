@@ -462,11 +462,11 @@ document.addEventListener('keydown',e=>{
 });
 
 /* ---------- Sản phẩm ---------- */
-let pSearch='',pSt='',ipv=null;
+let pSearch='',pSt='',ipv=null,cloneFrom=null;
 const usedP=p=>db.invoices.some(v=>v.items.some(i=>i.id===p.id))||db.imports.some(v=>v.items.some(i=>i.id===p.id))||db.moves.some(m=>m.pid===p.id&&m.type!=='Tồn đầu kỳ');
 function products(){
-  const e=editing?prod(editing):null;
-  $('#main').innerHTML=`<div class="card"><h2>${e?'Sửa sản phẩm':'Thêm sản phẩm'}</h2><div class="form" style="grid-template-columns:repeat(4,1fr)">
+  const e=editing?prod(editing):null,cs=!e&&cloneFrom?prod(cloneFrom):null;
+  $('#main').innerHTML=`<div class="card"><h2>${e?'Sửa sản phẩm':cs?'Sao chép sản phẩm <small>(từ: '+esc(cs.name)+')</small> <button class="ghost" data-clonecancel>Hủy sao chép</button>':'Thêm sản phẩm'}</h2><div class="form" style="grid-template-columns:repeat(4,1fr)">
    <label style="grid-column:span 2">Tên sản phẩm<input id="pn"></label><label>Mã hàng (SKU)<input id="pc"></label><label>Barcode<input id="pbc"></label>
    <label>Danh mục<select id="pg">${catOpts('')}</select></label>
    <label>Thương hiệu<input id="pb" placeholder="Viglacera, Dulux, Inax…"></label><label>Quy cách / màu<input id="pq" placeholder="60x60 cm, bóng kiếng…"></label>
@@ -475,7 +475,7 @@ function products(){
    <label>Giá vốn (đ)<input id="pk" type="number" min="0"></label><label>Giá bán lẻ (đ)<input id="pp" type="number" min="0"></label>
    <label>Giá thợ / sỉ (đ)<input id="pw" type="number" min="0"></label><label>Tồn kho<input id="ps" type="number" step="any"></label>
    <label>Báo sắp hết khi tồn ≤<input id="pm" type="number" min="0" step="any" placeholder="5"></label>
-   <div class="tools" style="grid-column:span 2;align-items:end"><button class="pri" data-saveprod>${e?'Lưu thay đổi':'Thêm'}</button>${e?'<button class="ghost" data-canceledit>Hủy</button>':''}</div></div>
+   <div class="tools" style="grid-column:span 2;align-items:end"><button class="pri" data-saveprod>${e?'Lưu thay đổi':cs?'Thêm bản sao':'Thêm'}</button>${cs?'<button class="ghost" data-saveprodnext>Thêm và sao chép tiếp</button>':''}${e?'<button class="ghost" data-canceledit>Hủy</button>':''}</div></div>
    <datalist id="units">${UNITS.map(u=>`<option>${u}</option>`).join('')}</datalist></div>
   ${ipv?`<div class="card"><h2>Xem trước nhập từ file</h2><p>${ipv.out.filter(o=>!o.ex).length} sản phẩm mới, ${ipv.out.filter(o=>o.ex).length} sản phẩm cập nhật theo SKU (chỉ ghi đè các ô có dữ liệu), ${ipv.err.length} dòng lỗi.</p>${ipv.err.slice(0,8).map(x=>`<div class="low">${esc(x)}</div>`).join('')}${ipv.out.length?`<table><tr><th>SKU</th><th>Tên</th><th>Danh mục</th><th class="n">Giá lẻ</th><th class="n">Tồn đầu</th><th></th></tr>${ipv.out.slice(0,6).map(o=>`<tr><td>${esc(o.d.code)}</td><td>${esc(o.d.name||(prod(o.ex)||{}).name||'')}</td><td>${esc(o.d.cat)}</td><td class="n">${money(o.d.price)}</td><td class="n">${o.ex?'—':o.stock}</td><td>${o.ex?'Cập nhật':'Mới'}</td></tr>`).join('')}</table>${ipv.out.length>6?'<small>… và '+(ipv.out.length-6)+' dòng khác</small>':''}`:''}<div class="tools" style="margin-top:12px"><button class="pri" data-ipgo ${ipv.out.length?'':'disabled'}>Nhập ${ipv.out.length} dòng hợp lệ</button><button class="ghost" data-ipx>Hủy</button></div></div>`:''}
   <div class="card"><h2>Quản lý danh mục (tối đa 3 cấp)</h2>
@@ -490,26 +490,29 @@ function products(){
    <div class="fb" id="aflt"></div><div id="plist"></div></div>`;
   $('#psr').oninput=ev=>{pSearch=ev.target.value;PG.pl=1;drawPL()};$('#fc').onchange=ev=>{fc=ev.target.value;af={};PG.pl=1;drawAF();drawPL()};$('#pst').onchange=ev=>{pSt=ev.target.value;PG.pl=1;drawPL()};
   $('#nc').onkeydown=ev=>{if(ev.key==='Enter')addCat()};
-  if(e){const v={pn:e.name,pc:e.code||'',pbc:e.barcode||'',pg:e.cat,pb:e.brand,pq:e.spec,pu:e.unit,pk:e.cost||'',pp:e.price,pw:e.wprice||'',ps:e.stock,pm:e.min||''};
+  const src=e||cs;
+  if(src){const v={pn:src.name,pc:e?e.code||'':'',pbc:e?e.barcode||'':'',pg:src.cat,pb:src.brand,pq:src.spec,pu:src.unit,pk:src.cost||'',pp:src.price,pw:src.wprice||'',ps:e?e.stock:'',pm:src.min||''}; /* bản sao: bỏ mã SKU, barcode và tồn kho */
     for(const k in v)$('#'+k).value=v[k]}
-  uRows=e?(e.units||[]).map(u=>({...u})):[];$('#pg').onchange=()=>drawAttrs();$('#pu').oninput=drawUnits;drawAttrs(e?e.attrs||{}:{});drawUnits();drawAF();drawPL();
+  uRows=src?(src.units||[]).map(u=>({...u})):[];$('#pg').onchange=()=>drawAttrs();$('#pu').oninput=drawUnits;drawAttrs(src?src.attrs||{}:{});drawUnits();drawAF();drawPL();
+  if(cs){$('#pc').focus()}
 }
 function drawPL(){
   const k=nz(pSearch),L=db.products.filter(p=>inCat(p,fc)&&attrOK(p)&&(!k||nz(ptext(p)).includes(k))&&stOK(p,pSt)),g=pager('pl',L.length);
   $('#plist').innerHTML=`<table><tr><th>Sản phẩm</th><th>Danh mục</th><th>ĐVT</th><th class="n">Giá vốn</th><th class="n">Giá lẻ</th><th class="n">Giá thợ</th><th class="n">Tồn</th><th></th></tr>
-  ${L.slice(g.from,g.from+50).map(p=>`<tr><td>${esc(p.name)}${p.status==='off'?' <span class="tag">Ngừng bán</span>':''}<br><small>${esc([p.code,p.barcode,pdesc(p)].filter(Boolean).join(', '))}</small></td><td>${esc(p.cat||'—')}</td><td>${esc(p.unit)}${(p.units||[]).length?'<br><small>'+esc(unitsTxt(p))+'</small>':''}</td><td class="n">${money(p.cost)}</td><td class="n">${money(p.price)}</td><td class="n">${p.wprice?money(p.wprice):'—'}</td><td class="n ${p.stock<=(p.min||5)?'low':''}">${rd(p.stock)}</td><td class="n"><button class="ghost" data-edit="${p.id}">Sửa</button><button class="ghost" data-pstat="${p.id}">${p.status==='off'?'Bán lại':'Ngừng bán'}</button>${usedP(p)?'':`<button class="ghost danger" data-delprod="${p.id}">Xóa</button>`}</td></tr>`).join('')||'<tr><td colspan="8" class="empty">Không có sản phẩm phù hợp. Điền thông tin ở trên rồi bấm Thêm, hoặc nhập từ file CSV.</td></tr>'}</table>${g.html}`;
+  ${L.slice(g.from,g.from+50).map(p=>`<tr><td>${esc(p.name)}${p.status==='off'?' <span class="tag">Ngừng bán</span>':''}<br><small>${esc([p.code,p.barcode,pdesc(p)].filter(Boolean).join(', '))}</small></td><td>${esc(p.cat||'—')}</td><td>${esc(p.unit)}${(p.units||[]).length?'<br><small>'+esc(unitsTxt(p))+'</small>':''}</td><td class="n">${money(p.cost)}</td><td class="n">${money(p.price)}</td><td class="n">${p.wprice?money(p.wprice):'—'}</td><td class="n ${p.stock<=(p.min||5)?'low':''}">${rd(p.stock)}</td><td class="n"><button class="ghost" data-edit="${p.id}">Sửa</button><button class="ghost" data-clone="${p.id}">Sao chép</button><button class="ghost" data-pstat="${p.id}">${p.status==='off'?'Bán lại':'Ngừng bán'}</button>${usedP(p)?'':`<button class="ghost danger" data-delprod="${p.id}">Xóa</button>`}</td></tr>`).join('')||'<tr><td colspan="8" class="empty">Không có sản phẩm phù hợp. Điền thông tin ở trên rồi bấm Thêm, hoặc nhập từ file CSV.</td></tr>'}</table>${g.html}`;
   $('#pcnt').textContent=L.length;
 }
-function saveProd(){
+function saveProd(next){
   const name=$('#pn').value.trim(),n=id=>+$('#'+id).value||0,code=$('#pc').value.trim();
   if(!name)return alert('Nhập tên sản phẩm.');
   if($('#pp').value==='')return alert('Nhập giá bán lẻ.');
   if(code&&db.products.some(x=>x.id!==editing&&(x.code||'').toLowerCase()===code.toLowerCase()))return alert('Mã hàng (SKU) này đã tồn tại.');
   const d={name,code,barcode:$('#pbc').value.trim(),cat:$('#pg').value,brand:$('#pb').value.trim(),spec:$('#pq').value.trim(),unit:$('#pu').value.trim()||'cái',cost:n('pk'),price:n('pp'),wprice:n('pw'),min:n('pm'),units:uRows.filter(u=>String(u.name).trim()&&u.per>0).map(u=>({name:String(u.name).trim(),per:+u.per})),attrs:readAttrs()},st=n('ps'),e=editing?prod(editing):null;
   d.box=d.units[0]?d.units[0].per:0;learnAttrs(d.attrs);
+  cloneFrom=null;
   if(e){Object.assign(e,d);const df=rd(st-e.stock);if(df){e.stock=rd(st);mv(e,'Điều chỉnh',df,'Sửa tồn trong thẻ sản phẩm')}}
-  else{const x=Object.assign({id:uid(),status:'on',stock:0,created:Date.now()},d);db.products.push(x);if(st){x.stock=rd(st);mv(x,'Tồn đầu kỳ',x.stock,'Khi tạo sản phẩm')}}
-  editing=null;save();products();
+  else{const x=Object.assign({id:uid(),status:'on',stock:0,created:Date.now()},d);db.products.push(x);if(next===true)cloneFrom=x.id;if(st){x.stock=rd(st);mv(x,'Tồn đầu kỳ',x.stock,'Khi tạo sản phẩm')}}
+  editing=null;save();products();toast(e?'Đã lưu thay đổi sản phẩm':'Đã thêm sản phẩm '+name);
 }
 function addCat(name){
   const v=(name||($('#nc')?$('#nc').value:'')).replace(/>/g,'').trim(),par=name?'':($('#npar')?$('#npar').value:'');
@@ -1119,7 +1122,10 @@ document.addEventListener('click',e=>{
   else if('pay' in d)pay();
   else if('gopay' in d)$('#panel').scrollIntoView({behavior:'smooth',block:'start'});
   else if('saveprod' in d)saveProd();
-  else if(d.edit){editing=d.edit;products();scrollTo(0,0)}
+  else if(d.edit){editing=d.edit;cloneFrom=null;products();scrollTo(0,0)}
+  else if(d.clone){editing=null;cloneFrom=d.clone;products();scrollTo(0,0)}
+  else if('clonecancel' in d){cloneFrom=null;products()}
+  else if('saveprodnext' in d)saveProd(true)
   else if('canceledit' in d){editing=null;products()}
   else if(d.delprod){const p=prod(d.delprod);if(confirm(`Xóa sản phẩm "${p.name}"? Hóa đơn cũ vẫn được giữ nguyên.`)){db.products=db.products.filter(x=>x!==p);db.moves=db.moves.filter(m=>m.pid!==p.id);orders.forEach(o=>o.lines=o.lines.filter(x=>x.id!==p.id));save();products()}}
   else if(d.print)printInv(db.invoices.find(v=>v.no===d.print));
